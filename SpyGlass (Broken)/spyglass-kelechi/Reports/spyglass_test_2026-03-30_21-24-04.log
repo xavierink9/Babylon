@@ -1,0 +1,122 @@
+2026-03-30 21:24:04,574 - INFO - ======================================================================
+2026-03-30 21:24:04,574 - INFO - SPYGLASS TEST STARTED
+2026-03-30 21:24:04,574 - INFO - ======================================================================
+2026-03-30 21:24:04,574 - INFO - Application log: C:\Users\xavie\Desktop\SpyGlass\spyglass-kelechi\Reports\spyglass_test_2026-03-30_21-24-04.log
+2026-03-30 21:24:04,574 - INFO - Keystroke log: C:\Users\xavie\Desktop\SpyGlass\spyglass-kelechi\Reports\keystrokes_2026-03-30_21-24-04.log
+2026-03-30 21:24:04,612 - INFO - Initializing Spyglass test...
+2026-03-30 21:24:04,613 - INFO - Running Spyglass setup...
+2026-03-30 21:24:04,614 - INFO - Initializing...
+2026-03-30 21:24:04,614 - INFO - Starting APP setup - Checking admin privileges...
+2026-03-30 21:24:04,614 - INFO - Checking admin privileges...
+2026-03-30 21:24:04,616 - INFO - Administrator privileges confirmed
+2026-03-30 21:24:04,616 - INFO - Administrator privileges verified
+2026-03-30 21:24:04,616 - INFO - Getting User consent...
+2026-03-30 21:24:04,616 - INFO - Creating ConsentScreen...
+2026-03-30 21:24:04,616 - INFO - Displaying consent screen...
+2026-03-30 21:24:16,727 - INFO - Consent received with monitoring level: HIGH
+2026-03-30 21:24:16,727 - INFO - User consent obtained
+2026-03-30 21:24:16,727 - INFO - Setting up configuration...
+2026-03-30 21:24:16,727 - INFO - Creating config with monitoring level: HIGH
+2026-03-30 21:24:16,794 - INFO - Config created successfully
+2026-03-30 21:24:16,794 - INFO - Printing config settings...
+2026-03-30 21:24:16,808 - INFO - Config settings printed
+2026-03-30 21:24:16,808 - INFO - Configuration setup complete
+2026-03-30 21:24:16,808 - INFO - Setting up database...
+2026-03-30 21:24:16,810 - INFO - Creating DatabaseManager...
+2026-03-30 21:24:16,868 - INFO - Initializing database...
+2026-03-30 21:24:16,947 - INFO - Gathering user system information...
+2026-03-30 21:24:20,961 - INFO - System information saved to: C:\Users\xavie\Desktop\SpyGlass\spyglass-kelechi\system_info.json
+2026-03-30 21:24:21,000 - INFO - Verifying database connection...
+2026-03-30 21:24:21,009 - INFO - Database setup complete
+2026-03-30 21:24:21,010 - INFO - Database setup initialized successfully
+2026-03-30 21:24:21,223 - INFO - Logged 47/47 installed apps
+2026-03-30 21:24:21,223 - INFO - Installed apps logged to DB: 47
+2026-03-30 21:24:21,223 - INFO - Keystroke logging is ENABLED
+2026-03-30 21:24:21,223 - INFO - Setup completed successfully. Showing a menu...
+2026-03-30 21:25:00,682 - INFO - Starting integrated monitoring for 180 seconds
+2026-03-30 21:25:00,779 - INFO - Entering app monitor loop
+2026-03-30 21:25:00,779 - INFO - App monitor thread started
+2026-03-30 21:25:00,779 - INFO - Active app changed: python.exe | Administrator: C:\Users\xavie\AppData\Local\Programs\Python\Python310\python.exe
+2026-03-30 21:25:02,816 - INFO - Integrated monitoring started successfully
+2026-03-30 21:25:05,354 - WARNING - [MEDIUM] 311 processes are running simultaneously. | module=application_monitor | app=System | observed=311 | threshold=90
+2026-03-30 21:25:05,392 - WARNING - [HIGH] Background process System Idle Process is using 1282.1% CPU. | module=application_monitor | app=System Idle Process | observed=1282.1 | threshold=45
+2026-03-30 21:25:05,412 - WARNING - [MEDIUM] Unknown or unrecognized application detected: System Idle Process. | module=application_monitor | app=System Idle Process | observed=1 | threshold=None
+2026-03-30 21:25:05,416 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for System Idle Process. | module=application_monitor | app=System Idle Process | observed=1282.1 | threshold=70
+2026-03-30 21:25:05,429 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Registry. | module=application_monitor | app=Registry | observed=1 | threshold=None
+2026-03-30 21:25:05,438 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MemCompression. | module=application_monitor | app=MemCompression | observed=1 | threshold=None
+2026-03-30 21:25:05,439 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MpDefenderCoreService.exe. | module=application_monitor | app=MpDefenderCoreService.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,466 - WARNING - [MEDIUM] Unknown or unrecognized application detected: AppProvisioningPlugin.exe. | module=application_monitor | app=AppProvisioningPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,471 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Discord.exe. | module=application_monitor | app=Discord.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,476 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MsMpEng.exe. | module=application_monitor | app=MsMpEng.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,476 - WARNING - [MEDIUM] Unknown or unrecognized application detected: NisSrv.exe. | module=application_monitor | app=NisSrv.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,504 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MessagingPlugin.exe. | module=application_monitor | app=MessagingPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,504 - WARNING - [MEDIUM] Unknown or unrecognized application detected: python.exe. | module=application_monitor | app=python.exe | observed=1 | threshold=None
+2026-03-30 21:25:05,532 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for python.exe. | module=application_monitor | app=python.exe | observed=94.2 | threshold=70
+2026-03-30 21:25:20,562 - INFO - Active app changed: python.exe | SpyGlass Alert
+2026-03-30 21:25:24,063 - WARNING - [HIGH] Background process svchost.exe is using 60.7% CPU. | module=application_monitor | app=svchost.exe | observed=60.7 | threshold=45
+2026-03-30 21:25:39,079 - INFO - Active app changed: Notepad.exe | *Terraria - Notepad
+2026-03-30 21:25:44,917 - WARNING - [MEDIUM] 315 processes are running simultaneously. | module=application_monitor | app=System | observed=315 | threshold=90
+2026-03-30 21:25:44,971 - WARNING - [HIGH] System Idle Process has exceeded 70% CPU for at least 20 seconds. | module=application_monitor | app=System Idle Process | observed=1152.4 | threshold=20
+2026-03-30 21:25:44,976 - WARNING - [HIGH] Background process System Idle Process is using 1152.4% CPU. | module=application_monitor | app=System Idle Process | observed=1152.4 | threshold=45
+2026-03-30 21:25:44,976 - WARNING - [MEDIUM] Unknown or unrecognized application detected: System Idle Process. | module=application_monitor | app=System Idle Process | observed=1 | threshold=None
+2026-03-30 21:25:45,008 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for System Idle Process. | module=application_monitor | app=System Idle Process | observed=1152.4 | threshold=70
+2026-03-30 21:25:45,008 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Registry. | module=application_monitor | app=Registry | observed=1 | threshold=None
+2026-03-30 21:25:45,017 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MemCompression. | module=application_monitor | app=MemCompression | observed=1 | threshold=None
+2026-03-30 21:25:45,041 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MpDefenderCoreService.exe. | module=application_monitor | app=MpDefenderCoreService.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,055 - WARNING - [MEDIUM] Unknown or unrecognized application detected: AppProvisioningPlugin.exe. | module=application_monitor | app=AppProvisioningPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,071 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Discord.exe. | module=application_monitor | app=Discord.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,071 - WARNING - [HIGH] Background process MsMpEng.exe is using 61.3% CPU. | module=application_monitor | app=MsMpEng.exe | observed=61.3 | threshold=45
+2026-03-30 21:25:45,104 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MsMpEng.exe. | module=application_monitor | app=MsMpEng.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,117 - WARNING - [MEDIUM] Unknown or unrecognized application detected: NisSrv.exe. | module=application_monitor | app=NisSrv.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,136 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MessagingPlugin.exe. | module=application_monitor | app=MessagingPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:25:45,168 - WARNING - [MEDIUM] Unknown or unrecognized application detected: python.exe. | module=application_monitor | app=python.exe | observed=1 | threshold=None
+2026-03-30 21:25:46,263 - WARNING - [HIGH] Typing speed reached 250 keystrokes per minute. | module=keystroke_monitor | app=Keyboard Input | observed=250 | threshold=250
+2026-03-30 21:26:00,218 - INFO - Active app changed: python.exe | SpyGlass Alert
+2026-03-30 21:26:18,245 - INFO - Active app changed: python.exe | SpyGlass Alert
+2026-03-30 21:26:21,225 - WARNING - [MEDIUM] 313 processes are running simultaneously. | module=application_monitor | app=System | observed=313 | threshold=90
+2026-03-30 21:26:21,272 - WARNING - [HIGH] System Idle Process has exceeded 70% CPU for at least 20 seconds. | module=application_monitor | app=System Idle Process | observed=1298.9 | threshold=20
+2026-03-30 21:26:21,295 - WARNING - [HIGH] Background process System Idle Process is using 1298.9% CPU. | module=application_monitor | app=System Idle Process | observed=1298.9 | threshold=45
+2026-03-30 21:26:21,305 - WARNING - [MEDIUM] Unknown or unrecognized application detected: System Idle Process. | module=application_monitor | app=System Idle Process | observed=1 | threshold=None
+2026-03-30 21:26:21,305 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for System Idle Process. | module=application_monitor | app=System Idle Process | observed=1298.9 | threshold=70
+2026-03-30 21:26:21,320 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Registry. | module=application_monitor | app=Registry | observed=1 | threshold=None
+2026-03-30 21:26:21,336 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MemCompression. | module=application_monitor | app=MemCompression | observed=1 | threshold=None
+2026-03-30 21:26:21,352 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MpDefenderCoreService.exe. | module=application_monitor | app=MpDefenderCoreService.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,368 - WARNING - [MEDIUM] Unknown or unrecognized application detected: AppProvisioningPlugin.exe. | module=application_monitor | app=AppProvisioningPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,368 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Discord.exe. | module=application_monitor | app=Discord.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,385 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MsMpEng.exe. | module=application_monitor | app=MsMpEng.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,400 - WARNING - [MEDIUM] Unknown or unrecognized application detected: NisSrv.exe. | module=application_monitor | app=NisSrv.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,400 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MessagingPlugin.exe. | module=application_monitor | app=MessagingPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:26:21,416 - WARNING - [MEDIUM] Unknown or unrecognized application detected: python.exe. | module=application_monitor | app=python.exe | observed=1 | threshold=None
+2026-03-30 21:26:36,431 - INFO - Active app changed: python.exe | SpyGlass Alert
+2026-03-30 21:26:54,550 - INFO - Active app changed: python.exe | SpyGlass Alert
+2026-03-30 21:26:57,908 - WARNING - [MEDIUM] 313 processes are running simultaneously. | module=application_monitor | app=System | observed=313 | threshold=90
+2026-03-30 21:26:57,956 - WARNING - [HIGH] System Idle Process has exceeded 70% CPU for at least 20 seconds. | module=application_monitor | app=System Idle Process | observed=1316.6 | threshold=20
+2026-03-30 21:26:57,987 - WARNING - [HIGH] Background process System Idle Process is using 1316.6% CPU. | module=application_monitor | app=System Idle Process | observed=1316.6 | threshold=45
+2026-03-30 21:26:58,003 - WARNING - [MEDIUM] Unknown or unrecognized application detected: System Idle Process. | module=application_monitor | app=System Idle Process | observed=1 | threshold=None
+2026-03-30 21:26:58,019 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for System Idle Process. | module=application_monitor | app=System Idle Process | observed=1316.6 | threshold=70
+2026-03-30 21:26:58,035 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Registry. | module=application_monitor | app=Registry | observed=1 | threshold=None
+2026-03-30 21:26:58,051 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MemCompression. | module=application_monitor | app=MemCompression | observed=1 | threshold=None
+2026-03-30 21:26:58,051 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MpDefenderCoreService.exe. | module=application_monitor | app=MpDefenderCoreService.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,067 - WARNING - [MEDIUM] Unknown or unrecognized application detected: AppProvisioningPlugin.exe. | module=application_monitor | app=AppProvisioningPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,082 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Discord.exe. | module=application_monitor | app=Discord.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,082 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MsMpEng.exe. | module=application_monitor | app=MsMpEng.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,082 - WARNING - [MEDIUM] Unknown or unrecognized application detected: NisSrv.exe. | module=application_monitor | app=NisSrv.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,102 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MessagingPlugin.exe. | module=application_monitor | app=MessagingPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:26:58,114 - WARNING - [MEDIUM] Unknown or unrecognized application detected: python.exe. | module=application_monitor | app=python.exe | observed=1 | threshold=None
+2026-03-30 21:27:13,131 - INFO - Active app changed: explorer.exe | 
+2026-03-30 21:27:32,502 - INFO - Active app changed: explorer.exe | 
+2026-03-30 21:27:36,296 - WARNING - [MEDIUM] 313 processes are running simultaneously. | module=application_monitor | app=System | observed=313 | threshold=90
+2026-03-30 21:27:36,347 - WARNING - [HIGH] System Idle Process has exceeded 70% CPU for at least 20 seconds. | module=application_monitor | app=System Idle Process | observed=1346.7 | threshold=20
+2026-03-30 21:27:36,357 - WARNING - [HIGH] Background process System Idle Process is using 1346.7% CPU. | module=application_monitor | app=System Idle Process | observed=1346.7 | threshold=45
+2026-03-30 21:27:36,358 - WARNING - [MEDIUM] Unknown or unrecognized application detected: System Idle Process. | module=application_monitor | app=System Idle Process | observed=1 | threshold=None
+2026-03-30 21:27:36,391 - WARNING - [CRITICAL] High CPU usage combined with unknown application activity detected for System Idle Process. | module=application_monitor | app=System Idle Process | observed=1346.7 | threshold=70
+2026-03-30 21:27:36,399 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Registry. | module=application_monitor | app=Registry | observed=1 | threshold=None
+2026-03-30 21:27:36,412 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MemCompression. | module=application_monitor | app=MemCompression | observed=1 | threshold=None
+2026-03-30 21:27:36,422 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MpDefenderCoreService.exe. | module=application_monitor | app=MpDefenderCoreService.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,430 - WARNING - [MEDIUM] Unknown or unrecognized application detected: AppProvisioningPlugin.exe. | module=application_monitor | app=AppProvisioningPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,447 - WARNING - [MEDIUM] Unknown or unrecognized application detected: Discord.exe. | module=application_monitor | app=Discord.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,457 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MsMpEng.exe. | module=application_monitor | app=MsMpEng.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,461 - WARNING - [MEDIUM] Unknown or unrecognized application detected: NisSrv.exe. | module=application_monitor | app=NisSrv.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,482 - WARNING - [MEDIUM] Unknown or unrecognized application detected: MessagingPlugin.exe. | module=application_monitor | app=MessagingPlugin.exe | observed=1 | threshold=None
+2026-03-30 21:27:36,498 - WARNING - [MEDIUM] Unknown or unrecognized application detected: python.exe. | module=application_monitor | app=python.exe | observed=1 | threshold=None
+2026-03-30 21:27:51,518 - INFO - Active app changed: python.exe | SpyGlass Alert

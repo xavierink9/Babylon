@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-03-30T21:29:16.387750",
+  "system": {
+    "os": "Windows",
+    "os_version": "10",
+    "os_build": "26100",
+    "hostname": "XaviersLaptop",
+    "username": "xavie",
+    "machine": "AMD64",
+    "platform": "win32"
+  },
+  "hardware": {
+    "machine_id": "27020743711315",
+    "processor_count": 14,
+    "processor_count_logical": 14,
+    "total_ram_bytes": 16766066688,
+    "total_ram_gb": 15.61,
+    "boot_time": "2026-02-05T19:07:20.161367"
+  },
+  "network": {
+    "hostname": "XaviersLaptop",
+    "fqdn": "XaviersLaptop",
+    "local_ip": "10.0.0.91",
+    "mac_addresses": {
+      "Local Area Connection* 1": "18-93-41-D4-9A-50",
+      "Wi-Fi": "18-93-41-D4-9A-4F",
+      "Bluetooth Network Connection": "18-93-41-D4-9A-53"
+    }
+  },
+  "storage": {
+    "C:\\": {
+      "mountpoint": "C:\\",
+      "fstype": "NTFS",
+      "total_bytes": 509722226688,
+      "total_gb": 474.72,
+      "used_bytes": 188051210240,
+      "used_gb": 175.14,
+      "free_bytes": 321671016448,
+      "free_gb": 299.58,
+      "percent_used": 36.9
+    },
+    "D:\\": {
+      "mountpoint": "D:\\",
+      "fstype": "UDF",
+      "total_bytes": 3549376512,
+      "total_gb": 3.31,
+      "used_bytes": 3549376512,
+      "used_gb": 3.31,
+      "free_bytes": 0,
+      "free_gb": 0.0,
+      "percent_used": 100.0
+    }
+  },
+  "memory": {
+    "virtual_memory": {
+      "total_bytes": 16766066688,
+      "total_gb": 15.61,
+      "available_bytes": 5082923008,
+      "available_gb": 4.73,
+      "percent": 69.7,
+      "used_bytes": 11683143680,
+      "free_bytes": 5082923008
+    },
+    "swap_memory": {
+      "total_bytes": 7247757312,
+      "total_gb": 6.75,
+      "used_bytes": 112816128,
+      "free_bytes": 7134941184,
+      "percent": 1.6
+    }
+  },
+  "processor": {
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "cpu_percent": 7.1,
+    "cpu_percent_per_core": [
+      4.5,
+      1.5,
+      47.0,
+      15.2,
+      6.2,
+      14.1,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      13.6,
+      0.0,
+      0.0
+    ],
+    "cpu_freq": {
+      "current_mhz": 1300.0,
+      "min_mhz": 0.0,
+      "max_mhz": 1300.0
+    },
+    "cpu_stats": {
+      "ctx_switches": 2996148850,
+      "interrupts": 1756345313,
+      "soft_interrupts": 0,
+      "syscalls": 1425869738
+    }
+  }
+}

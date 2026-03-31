@@ -1,0 +1,1102 @@
+--- orig/appMonitor.py	2026-03-31 00:35:19.316047469 +0000
++++ new/appMonitor.py	2026-03-31 00:37:44.623262019 +0000
+@@ -1,8 +1,10 @@
+-import threading
+-from datetime import datetime
+-from typing import Dict, Any, Optional, List
+ import logging
+ import sys
++import threading
++import time
++from datetime import datetime
++from typing import Any, Callable, Dict, List, Optional, Set
++
+ import psutil
+ import winreg
+ 
+@@ -10,12 +12,29 @@
+ 
+ 
+ class AppMonitor:
+-    def __init__(self, poll_interval: float = 15.0):
++    def __init__(
++        self,
++        poll_interval: float = 15.0,
++        alert_manager=None,
++        thresholds: Optional[Dict[str, Dict[str, Any]]] = None,
++    ):
+         self.is_running = False
+         self.thread: Optional[threading.Thread] = None
+         self.current_process: Optional[Dict[str, Any]] = None
+         self.last_update: Optional[datetime] = None
+         self.poll_interval = poll_interval
++        self.alert_manager = alert_manager
++        self.thresholds = thresholds or {}
++        self.known_apps: Set[str] = set()
++        self.high_cpu_start: Dict[int, float] = {}
++        self.system_high_cpu_start: Optional[float] = None
++        self.process_cpu_tracker_started = False
++
++    def configure(self, alert_manager=None, thresholds: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
++        if alert_manager is not None:
++            self.alert_manager = alert_manager
++        if thresholds is not None:
++            self.thresholds = thresholds
+ 
+     def start_monitoring(self) -> bool:
+         if self.thread and self.thread.is_alive():
+@@ -24,6 +43,7 @@
+ 
+         try:
+             self.is_running = True
++            self._prime_cpu_counters()
+             self.thread = threading.Thread(target=self.monitor_loop, daemon=True, name="AppMonitor")
+             self.thread.start()
+             logging.info("App monitor thread started")
+@@ -48,12 +68,28 @@
+                     self.current_process = foreground
+                     self.last_update = datetime.now()
+                     logging.info(
+-                        f"Active app changed: {foreground['name']} | {foreground['window_title']}"
++                        "Active app changed: %s | %s",
++                        foreground["name"],
++                        foreground["window_title"],
+                     )
+ 
++                running_apps = self.get_running_apps()
++                self.evaluate_thresholds(running_apps, foreground)
+                 threading.Event().wait(self.poll_interval)
+             except Exception as e:
+-                logging.error(f"Error in app monitor loop: {e}")
++                logging.error(f"Error in app monitor loop: {e}", exc_info=True)
++
++    def _prime_cpu_counters(self) -> None:
++        try:
++            psutil.cpu_percent(interval=None)
++            for process in psutil.process_iter(["pid"]):
++                try:
++                    process.cpu_percent(interval=None)
++                except (psutil.NoSuchProcess, psutil.AccessDenied):
++                    continue
++            self.process_cpu_tracker_started = True
++        except Exception as exc:
++            logging.debug("Unable to prime CPU counters: %s", exc)
+ 
+     def get_foreground_window(self) -> Optional[Dict[str, Any]]:
+         try:
+@@ -94,14 +130,7 @@
+         running_apps: List[Dict[str, Any]] = []
+ 
+         try:
+-            for process in psutil.process_iter([
+-                "pid",
+-                "name",
+-                "exe",
+-                "status",
+-                "memory_info",
+-                "cpu_percent",
+-            ]):
++            for process in psutil.process_iter(["pid", "name", "exe", "status", "memory_info"]):
+                 try:
+                     info = process.info
+                     running_apps.append(
+@@ -113,7 +142,7 @@
+                             "memory_mb": round((info.get("memory_info").rss / (1024 * 1024)), 2)
+                             if info.get("memory_info")
+                             else 0.0,
+-                            "cpu_percent": float(info.get("cpu_percent") or 0.0),
++                            "cpu_percent": float(process.cpu_percent(interval=None) or 0.0),
+                             "window_title": "",
+                         }
+                     )
+@@ -185,6 +214,7 @@
+     def scan_and_log_installed_apps(self) -> int:
+         installed_apps = self.get_installed_apps()
+         logged_count = 0
++        self.known_apps = {app["name"].lower() for app in installed_apps if app.get("name")}
+ 
+         for app in installed_apps:
+             try:
+@@ -204,6 +234,170 @@
+         logging.info(f"Logged {logged_count}/{len(installed_apps)} installed apps")
+         return logged_count
+ 
++    def log_apps(self) -> int:
++        return self.scan_and_log_installed_apps()
++
++    def is_visible_app_present(self) -> bool:
++        foreground = self.get_foreground_window()
++        return bool(foreground and (foreground.get("name") or foreground.get("window_title")))
++
++    def evaluate_thresholds(self, running_apps: List[Dict[str, Any]], foreground: Optional[Dict[str, Any]]) -> None:
++        if not self.alert_manager:
++            return
++
++        application_thresholds = self.thresholds.get("application", {})
++        if not application_thresholds:
++            return
++
++        process_count_limit = application_thresholds.get("process_count", 100)
++        if len(running_apps) > process_count_limit:
++            self.alert_manager.trigger_alert(
++                category="System Overload",
++                severity="medium",
++                module="application_monitor",
++                key="process_count_limit",
++                app_name="System",
++                exe_path="INTERNAL::SYSTEM",
++                threshold_name="process_count",
++                threshold_value=process_count_limit,
++                observed_value=len(running_apps),
++                message=f"{len(running_apps)} processes are running simultaneously.",
++            )
++
++        total_cpu = psutil.cpu_percent(interval=None)
++        self._check_total_cpu(total_cpu, application_thresholds)
++
++        foreground_pid = foreground.get("pid") if foreground else None
++        for app in running_apps:
++            self._check_process_thresholds(app, foreground_pid, application_thresholds)
++
++    def _check_total_cpu(self, total_cpu: float, thresholds: Dict[str, Any]) -> None:
++        cpu_limit = thresholds.get("system_cpu_percent", 90)
++        duration_limit = thresholds.get("system_cpu_duration_seconds", 60)
++        now = time.time()
++
++        if total_cpu > cpu_limit:
++            if self.system_high_cpu_start is None:
++                self.system_high_cpu_start = now
++            elif now - self.system_high_cpu_start >= duration_limit:
++                self.alert_manager.trigger_alert(
++                    category="System Performance Risk",
++                    severity="high",
++                    module="application_monitor",
++                    key="system_cpu_high",
++                    app_name="System",
++                    exe_path="INTERNAL::SYSTEM",
++                    threshold_name="system_cpu_duration_seconds",
++                    threshold_value=duration_limit,
++                    observed_value=round(total_cpu, 2),
++                    message=f"Overall CPU usage has remained above {cpu_limit}% for at least {duration_limit} seconds.",
++                )
++        else:
++            self.system_high_cpu_start = None
++
++    def _check_process_thresholds(self, app: Dict[str, Any], foreground_pid: Optional[int], thresholds: Dict[str, Any]) -> None:
++        pid = int(app.get("pid") or 0)
++        app_name = app.get("name") or "Unknown"
++        exe_path = app.get("exe_path") or "Unknown"
++        cpu_percent = float(app.get("cpu_percent") or 0.0)
++        now = time.time()
++
++        app_cpu_limit = thresholds.get("app_cpu_percent", 80)
++        app_cpu_duration = thresholds.get("app_cpu_duration_seconds", 30)
++        if cpu_percent > app_cpu_limit:
++            started = self.high_cpu_start.setdefault(pid, now)
++            if now - started >= app_cpu_duration:
++                self.alert_manager.trigger_alert(
++                    category="Performance Risk",
++                    severity="high",
++                    module="application_monitor",
++                    key=f"app_cpu_high:{pid}",
++                    app_name=app_name,
++                    exe_path=exe_path,
++                    threshold_name="app_cpu_duration_seconds",
++                    threshold_value=app_cpu_duration,
++                    observed_value=round(cpu_percent, 2),
++                    message=f"{app_name} has exceeded {app_cpu_limit}% CPU for at least {app_cpu_duration} seconds.",
++                )
++        else:
++            self.high_cpu_start.pop(pid, None)
++
++        bg_cpu_limit = thresholds.get("background_cpu_percent", 50)
++        if foreground_pid and pid != foreground_pid and cpu_percent > bg_cpu_limit:
++            self.alert_manager.trigger_alert(
++                category="Hidden Activity",
++                severity="high",
++                module="application_monitor",
++                key=f"background_cpu:{pid}",
++                app_name=app_name,
++                exe_path=exe_path,
++                threshold_name="background_cpu_percent",
++                threshold_value=bg_cpu_limit,
++                observed_value=round(cpu_percent, 2),
++                message=f"Background process {app_name} is using {cpu_percent:.1f}% CPU.",
++            )
++
++        is_unknown = self._is_unknown_app(app_name, exe_path)
++        if is_unknown:
++            self.alert_manager.trigger_alert(
++                category="Suspicious Application",
++                severity="medium",
++                module="application_monitor",
++                key=f"unknown_app:{exe_path}",
++                app_name=app_name,
++                exe_path=exe_path,
++                threshold_name="unknown_application_detected",
++                observed_value=1,
++                message=f"Unknown or unrecognized application detected: {app_name}.",
++            )
++            if cpu_percent > app_cpu_limit:
++                self.alert_manager.trigger_alert(
++                    category="Potential Malware",
++                    severity="critical",
++                    module="application_monitor",
++                    key=f"unknown_high_cpu:{exe_path}",
++                    app_name=app_name,
++                    exe_path=exe_path,
++                    threshold_name="combined_high_cpu_unknown_app",
++                    threshold_value=app_cpu_limit,
++                    observed_value=round(cpu_percent, 2),
++                    message=f"High CPU usage combined with unknown application activity detected for {app_name}.",
++                )
++
++        if self._is_spyglass_process(app_name, exe_path):
++            spyglass_limit = thresholds.get("spyglass_cpu_percent", 10)
++            if cpu_percent > spyglass_limit:
++                self.alert_manager.trigger_alert(
++                    category="Application Performance Issue",
++                    severity="medium",
++                    module="application_monitor",
++                    key=f"spyglass_cpu:{pid}",
++                    app_name=app_name,
++                    exe_path=exe_path,
++                    threshold_name="spyglass_cpu_percent",
++                    threshold_value=spyglass_limit,
++                    observed_value=round(cpu_percent, 2),
++                    message=f"SpyGlass is using {cpu_percent:.1f}% CPU, exceeding the configured threshold.",
++                )
++
++    def _is_unknown_app(self, app_name: str, exe_path: str) -> bool:
++        app_name_l = (app_name or "").lower()
++        exe_path_l = (exe_path or "").lower()
++        if not app_name_l:
++            return False
++        if app_name_l in self.known_apps:
++            return False
++        if exe_path_l in {"unknown", ""}:
++            return True
++        if "\\windows\\" in exe_path_l or exe_path_l.startswith("c:\\program files") or exe_path_l.startswith("c:\\program files (x86)"):
++            return False
++        return True
++
++    def _is_spyglass_process(self, app_name: str, exe_path: str) -> bool:
++        app_name_l = (app_name or "").lower()
++        exe_path_l = (exe_path or "").lower()
++        return "spyglass" in app_name_l or "spyglass" in exe_path_l
++
+     def cleanup(self) -> None:
+         if self.is_running:
+             self.stop_monitoring()
+--- orig/keystroke_monitor.py	2026-03-31 00:35:19.316305866 +0000
++++ new/keystroke_monitor.py	2026-03-31 00:38:58.736728528 +0000
+@@ -1,17 +1,24 @@
+-import os
+ import datetime
+-from pynput import keyboard
+-from typing import Dict, Optional
++import logging
+ import threading
++import time
++from collections import deque
++from typing import Any, Callable, Dict, Optional
++
++from pynput import keyboard, mouse
+ 
+-### Keystroke Monitor Class - for App
+ 
+ class KeystrokeMonitor:
+-    #Monitor keystrokes
+-    
+-    def __init__(self, time_interval: int = 60, log_file: str = "keystrokes.log"):
++    # Monitor keystrokes
++    def __init__(
++        self,
++        time_interval: int = 60,
++        log_file: str = "keystrokes.log",
++        alert_manager=None,
++        thresholds: Optional[Dict[str, Dict[str, Any]]] = None,
++        active_app_provider: Optional[Callable[[], bool]] = None,
++    ):
+         print("Initializing KeystrokeMonitor...")
+-        
+         self.running = False
+         self.time_interval = time_interval
+         self.log_file = log_file
+@@ -19,57 +26,175 @@
+         self.lock = threading.Lock()
+         self.interval_start = datetime.datetime.now()
+         self.listener: Optional[keyboard.Listener] = None
++        self.mouse_listener: Optional[mouse.Listener] = None
+         self.last_key: Optional[str] = None
+-        
++        self.alert_manager = alert_manager
++        self.thresholds = thresholds or {}
++        self.active_app_provider = active_app_provider
++
++        self.key_timestamps = deque()
++        now = time.time()
++        self.last_keypress_time = now
++        self.continuous_typing_start = now
++        self.last_mouse_activity = now
++        self.last_visibility_check = 0.0
++
++    def configure(self, alert_manager=None, thresholds: Optional[Dict[str, Dict[str, Any]]] = None, active_app_provider=None) -> None:
++        if alert_manager is not None:
++            self.alert_manager = alert_manager
++        if thresholds is not None:
++            self.thresholds = thresholds
++        if active_app_provider is not None:
++            self.active_app_provider = active_app_provider
++
+     def on_press(self, key):
++        timestamp = time.time()
+         try:
+             keyStr = key.char
+         except AttributeError:
+             keyStr = str(key)
++
+         with self.lock:
+             self.keystrokes[keyStr] = self.keystrokes.get(keyStr, 0) + 1
+             self.last_key = keyStr
+-        
+-    def on_click(self, x,y):
+-        with self.lock:
+-            self.keystrokes['Mouse Click'] = self.keystrokes.get('Mouse Click', 0) + 1
+-    
++
++        self.key_timestamps.append(timestamp)
++        while self.key_timestamps and timestamp - self.key_timestamps[0] > 60:
++            self.key_timestamps.popleft()
++
++        self._update_continuous_typing(timestamp)
++        self._evaluate_thresholds(timestamp)
++
++    def on_click(self, x, y, button, pressed):
++        self.last_mouse_activity = time.time()
++        if pressed:
++            with self.lock:
++                self.keystrokes['Mouse Click'] = self.keystrokes.get('Mouse Click', 0) + 1
++
++    def on_move(self, x, y):
++        self.last_mouse_activity = time.time()
++
++    def on_scroll(self, x, y, dx, dy):
++        self.last_mouse_activity = time.time()
++
++    def _update_continuous_typing(self, timestamp: float) -> None:
++        keystroke_thresholds = self.thresholds.get("keystroke", {})
++        pause_reset_seconds = keystroke_thresholds.get("pause_reset_seconds", 3)
++        if timestamp - self.last_keypress_time > pause_reset_seconds:
++            self.continuous_typing_start = timestamp
++        self.last_keypress_time = timestamp
++
++    def _evaluate_thresholds(self, timestamp: float) -> None:
++        if not self.alert_manager:
++            return
++
++        keystroke_thresholds = self.thresholds.get("keystroke", {})
++        if not keystroke_thresholds:
++            return
++
++        idle_mouse_seconds = keystroke_thresholds.get("idle_mouse_seconds", 120)
++        if timestamp - self.last_mouse_activity >= idle_mouse_seconds:
++            self.alert_manager.trigger_alert(
++                category="Suspicious Activity",
++                severity="high",
++                module="keystroke_monitor",
++                key="idle_typing",
++                app_name="Keyboard Input",
++                exe_path="INTERNAL::KEYSTROKE",
++                threshold_name="idle_mouse_seconds",
++                threshold_value=idle_mouse_seconds,
++                observed_value=round(timestamp - self.last_mouse_activity, 1),
++                message="Typing was detected while the system appeared idle with no mouse movement.",
++            )
++
++        current_kpm = len(self.key_timestamps)
++        fast_typing_limit = keystroke_thresholds.get("fast_typing_kpm", 300)
++        if current_kpm >= fast_typing_limit:
++            self.alert_manager.trigger_alert(
++                category="Automation / Bot Behavior",
++                severity="high",
++                module="keystroke_monitor",
++                key="fast_typing_kpm",
++                app_name="Keyboard Input",
++                exe_path="INTERNAL::KEYSTROKE",
++                threshold_name="fast_typing_kpm",
++                threshold_value=fast_typing_limit,
++                observed_value=current_kpm,
++                message=f"Typing speed reached {current_kpm} keystrokes per minute.",
++            )
++
++        continuous_typing_seconds = keystroke_thresholds.get("continuous_typing_seconds", 600)
++        continuous_duration = timestamp - self.continuous_typing_start
++        if continuous_duration >= continuous_typing_seconds:
++            self.alert_manager.trigger_alert(
++                category="Abnormal Usage",
++                severity="medium",
++                module="keystroke_monitor",
++                key="continuous_typing",
++                app_name="Keyboard Input",
++                exe_path="INTERNAL::KEYSTROKE",
++                threshold_name="continuous_typing_seconds",
++                threshold_value=continuous_typing_seconds,
++                observed_value=round(continuous_duration, 1),
++                message="Continuous typing was detected for an extended period without pause.",
++            )
++
++        visibility_interval = keystroke_thresholds.get("hidden_input_check_interval", 2)
++        if self.active_app_provider and (timestamp - self.last_visibility_check) >= visibility_interval:
++            self.last_visibility_check = timestamp
++            try:
++                visible_app_present = bool(self.active_app_provider())
++            except Exception:
++                visible_app_present = True
++            if not visible_app_present:
++                self.alert_manager.trigger_alert(
++                    category="Hidden Input Activity",
++                    severity="high",
++                    module="keystroke_monitor",
++                    key="hidden_input_activity",
++                    app_name="Keyboard Input",
++                    exe_path="INTERNAL::KEYSTROKE",
++                    threshold_name="visible_active_application",
++                    threshold_value=1,
++                    observed_value=0,
++                    message="Keystrokes were detected without a visible active application.",
++                )
++
+     def updateLog(self, string: str):
+         self.interval_start = datetime.datetime.now()
+-        with open(self.log_file, 'a') as l:
++        with open(self.log_file, 'a', encoding='utf-8') as l:
+             l.write(f"{self.interval_start} - {string}\n")
+-    
++
+     def updateDatabase(self, key):
+-        #update database with summary keystroke log
++        # update database with summary keystroke log
+         with self.lock:
+             self.keystrokes.clear()
+-            
+-    #requires admin privileges to run
++            self.key_timestamps.clear()
++
++    # requires admin privileges to run
+     def startLog(self) -> bool:
+         if self.running:
+             print("Keystroke Monitor is already running.")
+-            #throw user alert
+             return False
+-
+         print("Starting Keystroke Monitor...")
+-        
+         self.running = True
+         self.listener = keyboard.Listener(on_press=self.on_press)
++        self.mouse_listener = mouse.Listener(on_move=self.on_move, on_click=self.on_click, on_scroll=self.on_scroll)
+         self.listener.start()
++        self.mouse_listener.start()
+         return True
+-    
++
+     def stopLog(self):
+         if not self.running:
+             print("Keystroke Monitor is not running.")
+             return
+-        
++
+         print("Stopping Keystroke Monitor...")
+-        
+         self.running = False
+         if self.listener:
+             self.listener.stop()
++        if self.mouse_listener:
++            self.mouse_listener.stop()
+         self.updateLog(f"Keystrokes: {self.keystrokes}")
+         self.updateDatabase(self.keystrokes)
+         print("Keystroke Monitor stopped and data logged.")
+-        
+-        
+\ No newline at end of file
+--- orig/configSettings.py	2026-03-31 00:35:19.316466210 +0000
++++ new/configSettings.py	2026-03-31 00:39:31.140750553 +0000
+@@ -1,25 +1,26 @@
+ # Configuration Settings Module
+ # Manages monitoring configuration and settings
+-# 
+ 
+ import json
+ import os
+-from typing import Dict, Any, Optional
++from typing import Any, Dict
++
++from threshold_engine import ThresholdEngine
+ 
+ 
+ class ConfigSettings:
+-    # Manage Spyglass monitoring configuration 
+-    
++    # Manage Spyglass monitoring configuration
++
+     def __init__(self, config_file: str = "spyglass_settings.json"):
+         self.config_file = config_file
+         self.config = {}
+         self.load_config()
+-    
++
+     def load_config(self) -> None:
+-        #Load config from file if it exists, otherwise use defaults 
++        # Load config from file if it exists, otherwise use defaults
+         if os.path.exists(self.config_file):
+             try:
+-                with open(self.config_file, 'r') as f:
++                with open(self.config_file, 'r', encoding='utf-8') as f:
+                     self.config = json.load(f)
+                 print(f"Configuration loaded from {self.config_file}")
+             except Exception as e:
+@@ -27,7 +28,7 @@
+                 self._set_defaults()
+         else:
+             self._set_defaults()
+-    
++
+     def _set_defaults(self) -> None:
+         # Set default configuration
+         self.config = {
+@@ -40,76 +41,64 @@
+             "debug_logging": False,
+             "auto_backup_enabled": False,
+             "database_encryption": True,
++            "threshold_overrides": {},
+         }
+-    
++
+     def set_monitoring_level(self, level: str) -> bool:
+-        # Set monitoring level (LOW or HIGH)
+-        if level.upper() not in ['LOW', 'HIGH']:
+-            print("Invalid monitoring level. Must be 'LOW' or 'HIGH'")
++        # Set monitoring level (LOW, MEDIUM, or HIGH)
++        if level.upper() not in ['LOW', 'MEDIUM', 'HIGH']:
++            print("Invalid monitoring level. Must be 'LOW', 'MEDIUM', or 'HIGH'")
+             return False
+-        
++
+         level = level.upper()
+         self.config['monitoring_level'] = level
+         self.config['keystroke_logging_enabled'] = (level == 'HIGH')
+-        
++
+         print(f"Monitoring level set to {level}")
+         print(f"  - Keystroke logging: {'ENABLED' if level == 'HIGH' else 'DISABLED'}")
+-        
+         return True
+-    
++
+     def save_config(self) -> bool:
+         # Save configuration to file
+         try:
+-            with open(self.config_file, 'w') as f:
++            with open(self.config_file, 'w', encoding='utf-8') as f:
+                 json.dump(self.config, f, indent=2)
+             print(f"Configuration saved to {self.config_file}")
+             return True
+         except Exception as e:
+             print(f"Error saving config: {e}")
+             return False
+-    
++
+     def get_config(self) -> Dict[str, Any]:
+-        # Get entire configuration
+         return self.config
+-    
++
+     def set_config(self, new_config: Dict[str, Any]) -> None:
+-        #set config with userInput  from consent screen
+-        # "monitoring_level": "LOW",
+-        # "keystroke_logging_enabled": False,
+-        # "app_monitoring_enabled": True,
+-        # "screenshot_interval": 0,
+-        # "video_recording_enabled": False,
+-        # "max_storage_mb": 1000,
+-        # "debug_logging": False,
+-        # "auto_backup_enabled": False,
+-        # "database_encryption": True,
+-        
+         print("Updating configuration with %s" % new_config)
+         self.config.update(new_config)
+-        
+-    
++
+     def get_setting(self, key: str, default: Any = None) -> Any:
+-        # Get a specific config setting
+         return self.config.get(key, default)
+-    
++
+     def set_setting(self, key: str, value: Any) -> None:
+-        # Set a specific config value 
+         self.config[key] = value
+-    
++
+     def is_keylogger_enabled(self) -> bool:
+-        # Check if keystroke logging is enabled 
+         return self.config.get('keystroke_logging_enabled', False)
+-    
++
+     def is_app_monitoring_enabled(self) -> bool:
+-        # Check if application monitoring is enabled 
+         return self.config.get('app_monitoring_enabled', True)
+-    
++
+     def get_monitoring_level(self) -> str:
+-        # Get current monitoring level 
+         return self.config.get('monitoring_level', 'LOW')
+-    
++
++    def get_thresholds(self) -> Dict[str, Dict[str, Any]]:
++        return ThresholdEngine(
++            monitoring_level=self.get_monitoring_level(),
++            overrides=self.config.get('threshold_overrides', {}),
++        ).get_thresholds()
++
+     def print_settings(self) -> None:
+-        # Print current settings
++        thresholds = self.get_thresholds()
+         print("\n" + "="*60)
+         print("CURRENT MONITORING SETTINGS".center(60))
+         print("="*60)
+@@ -121,7 +110,12 @@
+         print(f"  • Video Recording:        {'ENABLED' if self.config.get('video_recording_enabled') else 'DISABLED'}")
+         print(f"  • Auto Backup:            {'ENABLED' if self.config.get('auto_backup_enabled') else 'DISABLED'}")
+         print(f"  • Debug Logging:          {'ENABLED' if self.config.get('debug_logging') else 'DISABLED'}")
+-        
++        print(f"\nAlert Threshold Highlights:")
++        print(f"  • Fast Typing Limit:      {thresholds['keystroke']['fast_typing_kpm']} KPM")
++        print(f"  • Idle Typing Window:     {thresholds['keystroke']['idle_mouse_seconds']} seconds")
++        print(f"  • App CPU Threshold:      {thresholds['application']['app_cpu_percent']}%")
++        print(f"  • Process Count Limit:    {thresholds['application']['process_count']}")
++        print(f"  • System CPU Threshold:   {thresholds['application']['system_cpu_percent']}%")
+         print(f"\nStorage & Security:")
+         print(f"  • Max Storage:            {self.config.get('max_storage_mb', 1000)} MB")
+         print(f"  • Database Encryption:    {'ENABLED' if self.config.get('database_encryption') else 'DISABLED'}")
+@@ -129,7 +123,6 @@
+ 
+ 
+ def create_config(monitoring_level: str) -> ConfigSettings:
+-    # Create and save config based on consent screen selection
+     config = ConfigSettings()
+     config.set_monitoring_level(monitoring_level)
+     config.save_config()
+--- orig/spyglass.py	2026-03-31 00:35:19.316660300 +0000
++++ new/spyglass.py	2026-03-31 00:39:58.711030362 +0000
+@@ -9,6 +9,7 @@
+ from appMonitor import AppMonitor
+ from keystroke_monitor import KeystrokeMonitor
+ from database import DatabaseManager, updateKeystrokeSummaryTable
++from alert_manager import AlertManager
+ from consent import ConsentScreen
+ from adminHandler import AdminHandler
+ from keylogger import Keylogger
+@@ -25,6 +26,8 @@
+         self.keylogger = None
+         self.monitoring_level = None
+         self.is_running = False
++        self.alert_manager: Optional[AlertManager] = None
++        self.thresholds: Dict[str, Any] = {}
+     
+     def run(self) -> bool:
+         #Run the complete Spyglass a setup
+@@ -66,8 +69,14 @@
+ 
+         # system setup
+         self.keylogger = Keylogger(self)
+-        self.app_monitor = AppMonitor()
+         self.monitoring_level = self.consent.get_monitoring_level()
++        self.thresholds = self.config.get_thresholds()
++        self.alert_manager = AlertManager(
++            database=self.database,
++            user_id=self._resolve_user_id(),
++            cooldown_seconds=self.thresholds.get("alerting", {}).get("cooldown_seconds", 30),
++        )
++        self.app_monitor = AppMonitor(alert_manager=self.alert_manager, thresholds=self.thresholds)
+ 
+         # Log installed apps to DB
+         app_count = self.app_monitor.log_apps()
+@@ -80,7 +89,11 @@
+             logging.info("Keystroke logging is ENABLED")
+             
+             # Initialize keystroke monitor if high security
+-            self.keystroke_monitor = KeystrokeMonitor()
++            self.keystroke_monitor = KeystrokeMonitor(
++                alert_manager=self.alert_manager,
++                thresholds=self.thresholds,
++                active_app_provider=self.app_monitor.is_visible_app_present,
++            )
+         else:
+             print("\nKeystroke logging is DISABLED (LOW monitoring level)")
+             logging.info("Keystroke logging is DISABLED")
+@@ -139,12 +152,33 @@
+             logging.info("Printing config settings...")
+             self.config.print_settings()
+             logging.info("Config settings printed")
++            self.thresholds = self.config.get_thresholds()
+             return True
+         except Exception as e:
+             print(f"\nError setting up config: {e}\n")
+             logging.error(f"Error setting up config: {e}", exc_info=True)
+             return False
+     
++    def _resolve_user_id(self) -> str:
++        if self.user_info and isinstance(getattr(self.user_info, "info", None), dict):
++            hardware = self.user_info.info.get("hardware", {})
++            machine_id = hardware.get("machine_id")
++            if machine_id:
++                return str(machine_id)
++
++        if self.database and getattr(self.database, "connection", None):
++            try:
++                cursor = self.database.connection.cursor()
++                cursor.execute("SELECT userID FROM user ORDER BY createdAt DESC LIMIT 1")
++                row = cursor.fetchone()
++                cursor.close()
++                if row and row[0]:
++                    return str(row[0])
++            except Exception as exc:
++                logging.error(f"Failed to resolve user id: {exc}")
++
++        return "unknown_user"
++
+     def setup_db(self) -> bool:
+         # Initialize the database# 
+         try:
+--- orig/keylogger.py	2026-03-31 00:40:13.567277858 +0000
++++ new/keylogger.py	2026-03-31 00:40:14.784818695 +0000
+@@ -17,6 +17,8 @@
+         self.last_session_keystrokes = {}
+         self.monitoring_level = getattr(app, 'monitoring_level', None)
+         self.is_running = False
++        self.app = app
++        self.alert_manager = getattr(app, "alert_manager", None)
+     
+     def run(self) -> bool:
+         #Run the complete keylogger flow
+@@ -55,7 +57,18 @@
+         logging.info(f"Starting keystroke monitoring for {duration} seconds")
+         
+         try:
+-            self.keylogger = KeystrokeMonitor()
++            alert_manager = getattr(self, "alert_manager", None) or getattr(getattr(self, "app", None), "alert_manager", None)
++            thresholds = {}
++            if getattr(self, "config", None):
++                thresholds = self.config.get_thresholds()
++            active_app_provider = None
++            if getattr(getattr(self, "app", None), "app_monitor", None):
++                active_app_provider = self.app.app_monitor.is_visible_app_present
++            self.keylogger = KeystrokeMonitor(
++                alert_manager=alert_manager,
++                thresholds=thresholds,
++                active_app_provider=active_app_provider,
++            )
+             
+             if not self.keylogger.startLog():
+                 print("Failed to start keystroke monitoring.\n")
+@@ -231,7 +244,7 @@
+         if not self.database or not getattr(self.database, 'connection', None):
+             return None
+ 
+-        user_id = self._resolve_user_id()
++        user_id = self.resolve_user_id()
+         if not user_id:
+             return None
+ 
+--- /dev/null	2026-03-31 00:28:27.566713816 +0000
++++ new/threshold_engine.py	2026-03-31 00:36:19.376019800 +0000
+@@ -0,0 +1,94 @@
++from copy import deepcopy
++from typing import Dict, Any
++
++BASE_THRESHOLD_PROFILE: Dict[str, Dict[str, Any]] = {
++    "keystroke": {
++        "idle_mouse_seconds": 120,
++        "fast_typing_kpm": 300,
++        "continuous_typing_seconds": 600,
++        "pause_reset_seconds": 3,
++        "hidden_input_check_interval": 2,
++    },
++    "application": {
++        "app_cpu_percent": 80,
++        "app_cpu_duration_seconds": 30,
++        "background_cpu_percent": 50,
++        "process_count": 100,
++        "system_cpu_percent": 90,
++        "system_cpu_duration_seconds": 60,
++        "spyglass_cpu_percent": 10,
++    },
++    "screenshot": {
++        "screenshots_per_minute": 5,
++    },
++    "privacy": {
++        "simultaneous_heavy_features": 3,
++    },
++    "alerting": {
++        "cooldown_seconds": 30,
++    },
++}
++
++PROFILE_OVERRIDES: Dict[str, Dict[str, Dict[str, Any]]] = {
++    "LOW": {
++        "keystroke": {
++            "idle_mouse_seconds": 180,
++            "fast_typing_kpm": 400,
++            "continuous_typing_seconds": 900,
++        },
++        "application": {
++            "app_cpu_percent": 90,
++            "app_cpu_duration_seconds": 45,
++            "background_cpu_percent": 60,
++            "process_count": 125,
++            "system_cpu_percent": 95,
++            "system_cpu_duration_seconds": 75,
++            "spyglass_cpu_percent": 15,
++        },
++        "alerting": {
++            "cooldown_seconds": 45,
++        },
++    },
++    "MEDIUM": {},
++    "HIGH": {
++        "keystroke": {
++            "idle_mouse_seconds": 90,
++            "fast_typing_kpm": 250,
++            "continuous_typing_seconds": 480,
++            "pause_reset_seconds": 2,
++        },
++        "application": {
++            "app_cpu_percent": 70,
++            "app_cpu_duration_seconds": 20,
++            "background_cpu_percent": 45,
++            "process_count": 90,
++            "system_cpu_percent": 85,
++            "system_cpu_duration_seconds": 45,
++            "spyglass_cpu_percent": 8,
++        },
++        "alerting": {
++            "cooldown_seconds": 20,
++        },
++    },
++}
++
++
++def deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
++    for key, value in updates.items():
++        if isinstance(value, dict) and isinstance(base.get(key), dict):
++            deep_update(base[key], value)
++        else:
++            base[key] = value
++    return base
++
++
++class ThresholdEngine:
++    def __init__(self, monitoring_level: str = "MEDIUM", overrides: Dict[str, Any] | None = None):
++        self.monitoring_level = (monitoring_level or "MEDIUM").upper()
++        self.overrides = overrides or {}
++
++    def get_thresholds(self) -> Dict[str, Dict[str, Any]]:
++        profile = deepcopy(BASE_THRESHOLD_PROFILE)
++        deep_update(profile, PROFILE_OVERRIDES.get(self.monitoring_level, {}))
++        deep_update(profile, self.overrides)
++        return profile
+--- /dev/null	2026-03-31 00:28:27.566713816 +0000
++++ new/alert_manager.py	2026-03-31 00:36:19.383440774 +0000
+@@ -0,0 +1,191 @@
++import logging
++import threading
++from dataclasses import dataclass, field
++from datetime import datetime
++from typing import Any, Dict, Optional
++
++
++@dataclass
++class AlertEvent:
++    category: str
++    message: str
++    severity: str
++    module: str
++    user_id: str
++    app_name: str = "Unknown"
++    exe_path: str = "Unknown"
++    threshold_name: Optional[str] = None
++    threshold_value: Optional[float] = None
++    observed_value: Optional[float] = None
++    metadata: Dict[str, Any] = field(default_factory=dict)
++    timestamp: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
++
++
++class AlertManager:
++    def __init__(self, database=None, user_id: Optional[str] = None, cooldown_seconds: int = 30, popup_enabled: bool = True):
++        self.database = database
++        self.user_id = user_id or "unknown_user"
++        self.cooldown_seconds = max(int(cooldown_seconds), 1)
++        self.popup_enabled = popup_enabled
++        self._last_alert_times: Dict[str, datetime] = {}
++        self._lock = threading.Lock()
++
++    def update_context(self, *, database=None, user_id: Optional[str] = None, cooldown_seconds: Optional[int] = None) -> None:
++        if database is not None:
++            self.database = database
++        if user_id:
++            self.user_id = user_id
++        if cooldown_seconds is not None:
++            self.cooldown_seconds = max(int(cooldown_seconds), 1)
++
++    def trigger_alert(
++        self,
++        *,
++        category: str,
++        message: str,
++        severity: str = "medium",
++        module: str = "system",
++        key: Optional[str] = None,
++        app_name: str = "Unknown",
++        exe_path: str = "Unknown",
++        threshold_name: Optional[str] = None,
++        threshold_value: Optional[float] = None,
++        observed_value: Optional[float] = None,
++        metadata: Optional[Dict[str, Any]] = None,
++    ) -> bool:
++        now = datetime.now()
++        alert_key = key or f"{module}:{category}:{app_name}"
++
++        with self._lock:
++            previous = self._last_alert_times.get(alert_key)
++            if previous and (now - previous).total_seconds() < self.cooldown_seconds:
++                return False
++            self._last_alert_times[alert_key] = now
++
++        event = AlertEvent(
++            category=category,
++            message=message,
++            severity=severity,
++            module=module,
++            user_id=self.user_id,
++            app_name=app_name or "Unknown",
++            exe_path=exe_path or "Unknown",
++            threshold_name=threshold_name,
++            threshold_value=threshold_value,
++            observed_value=observed_value,
++            metadata=metadata or {},
++        )
++
++        logging.warning(
++            "[%s] %s | module=%s | app=%s | observed=%s | threshold=%s",
++            event.severity.upper(),
++            event.message,
++            event.module,
++            event.app_name,
++            event.observed_value,
++            event.threshold_value,
++        )
++        self._persist_event(event)
++        self._show_popup(event)
++        return True
++
++    def _persist_event(self, event: AlertEvent) -> None:
++        if not self.database or not getattr(self.database, "connection", None):
++            return
++
++        try:
++            cursor = self.database.connection.cursor()
++            cursor.execute(
++                """
++                INSERT INTO application (appName, executablePath, vendor)
++                VALUES (?, ?, ?)
++                ON CONFLICT(executablePath) DO UPDATE SET
++                    appName = excluded.appName,
++                    vendor = excluded.vendor
++                """,
++                (event.app_name, event.exe_path, "Spyglass Monitor"),
++            )
++            self.database.connection.commit()
++
++            cursor.execute(
++                "SELECT appID FROM application WHERE executablePath = ? LIMIT 1",
++                (event.exe_path,),
++            )
++            app_row = cursor.fetchone()
++            if not app_row:
++                cursor.close()
++                return
++            app_id = int(app_row[0])
++
++            threshold_id = self._ensure_threshold(cursor, app_id, event.threshold_name, event.threshold_value)
++
++            cursor.execute(
++                """
++                INSERT INTO alert (userID, appID, thresholdID, alertType, severity, dismissed, resolved)
++                VALUES (?, ?, ?, ?, ?, ?, ?)
++                """,
++                (event.user_id, app_id, threshold_id, event.category, event.severity, None, 0),
++            )
++            cursor.execute(
++                """
++                INSERT INTO activity_log (userID, appID, action, category, reason, duration)
++                VALUES (?, ?, ?, ?, ?, ?)
++                """,
++                (event.user_id, app_id, "threshold_alert", event.module, event.message, None),
++            )
++            self.database.connection.commit()
++            cursor.close()
++        except Exception as exc:
++            logging.error("Failed to persist alert to database: %s", exc, exc_info=True)
++
++    def _ensure_threshold(self, cursor, app_id: int, threshold_name: Optional[str], threshold_value: Optional[float]) -> int:
++        threshold_name = threshold_name or "generic_threshold"
++        threshold_value_int = int(threshold_value) if threshold_value is not None else None
++
++        if threshold_name in {"fast_typing_kpm"}:
++            max_keystrokes_per_min = threshold_value_int
++            max_screen_access_per_hour = None
++            max_runtime_minutes = None
++        elif threshold_name in {"screenshots_per_minute"}:
++            max_keystrokes_per_min = None
++            max_screen_access_per_hour = threshold_value_int * 60 if threshold_value_int is not None else None
++            max_runtime_minutes = None
++        elif threshold_name in {"app_cpu_duration_seconds", "system_cpu_duration_seconds", "continuous_typing_seconds"}:
++            max_keystrokes_per_min = None
++            max_screen_access_per_hour = None
++            max_runtime_minutes = max(1, int((threshold_value or 0) / 60)) if threshold_value is not None else None
++        else:
++            max_keystrokes_per_min = None
++            max_screen_access_per_hour = None
++            max_runtime_minutes = None
++
++        cursor.execute(
++            """
++            INSERT INTO privacy_threshold (appID, maxKeystrokesPerMin, maxScreenAccessPerHour, maxRuntimeMinutes)
++            VALUES (?, ?, ?, ?)
++            """,
++            (app_id, max_keystrokes_per_min, max_screen_access_per_hour, max_runtime_minutes),
++        )
++        return int(cursor.lastrowid)
++
++    def _show_popup(self, event: AlertEvent) -> None:
++        if not self.popup_enabled:
++            return
++
++        def _popup() -> None:
++            try:
++                import ctypes
++
++                text = (
++                    f"SpyGlass Alert\n\n"
++                    f"Category: {event.category}\n"
++                    f"Severity: {event.severity.upper()}\n"
++                    f"Module: {event.module}\n"
++                    f"Application: {event.app_name}\n\n"
++                    f"{event.message}"
++                )
++                ctypes.windll.user32.MessageBoxW(0, text, "SpyGlass Alert", 0x1000)
++            except Exception:
++                logging.info("Popup unavailable; alert shown in console/log only.")
++
++        threading.Thread(target=_popup, daemon=True).start()
